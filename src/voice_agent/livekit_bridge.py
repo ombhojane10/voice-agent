@@ -124,9 +124,16 @@ class LiveKitAudioBridge:
     def _on_track_subscribed(self, track, publication, participant) -> None:
         from livekit import rtc
 
+        identity = getattr(participant, "identity", "")
+        log_event(
+            "livekit_track_subscribed",
+            room=self.room_name,
+            participant=identity,
+            kind=str(getattr(track, "kind", "")),
+            publication_sid=getattr(publication, "sid", None),
+        )
         if getattr(track, "kind", None) != rtc.TrackKind.KIND_AUDIO:
             return
-        identity = getattr(participant, "identity", "")
         if identity == self.participant_identity:
             return
         task = asyncio.create_task(self._read_agent_audio(track, identity))
@@ -141,6 +148,12 @@ class LiveKitAudioBridge:
         async for event in stream:
             frame = event.frame
             data = bytes(frame.data)
+            log_event(
+                "agent_audio_frame_received",
+                room=self.room_name,
+                participant=participant_identity,
+                bytes=len(data),
+            )
             if self._outbound.full():
                 try:
                     self._outbound.get_nowait()

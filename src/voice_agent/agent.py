@@ -30,32 +30,46 @@ async def entrypoint(ctx):
     if getattr(ctx, "job", None) and getattr(ctx.job, "metadata", None):
         caller_phone = ctx.job.metadata
 
+    room_name = getattr(ctx.room, "name", "unknown")
+    instructions = build_prompt(caller_phone)
+    logger.info(
+        "Mandi voice agent entrypoint starting room=%s model=%s voice=%s",
+        room_name,
+        settings.gemini_live_model,
+        settings.gemini_live_voice,
+    )
+
     await ctx.connect()
+    logger.info("Mandi voice agent connected to room=%s", room_name)
 
     session = AgentSession(
         llm=google.realtime.RealtimeModel(
+            instructions=instructions,
             model=settings.gemini_live_model,
             voice=settings.gemini_live_voice,
             temperature=0.4,
+            language="hi-IN",
         )
     )
     agent = Agent(
-        instructions=build_prompt(caller_phone),
+        instructions=instructions,
         tools=AGENT_TOOLS,
     )
+    logger.info("Mandi voice agent session starting room=%s", room_name)
     await session.start(
         agent=agent,
         room=ctx.room,
         room_input_options=RoomInputOptions(),
     )
-    logger.info("Mandi voice agent started in room=%s", getattr(ctx.room, "name", "unknown"))
-    session.generate_reply(
+    logger.info("Mandi voice agent session started room=%s", room_name)
+    handle = session.generate_reply(
         instructions=(
             "Immediately greet the caller in natural Hindi/Hinglish. Say you are the "
             "MandiPlus AI assistant, ask how you can help, and keep it under two sentences."
         ),
         allow_interruptions=True,
     )
+    logger.info("Mandi voice agent greeting queued room=%s handle=%s", room_name, handle)
 
 
 def main() -> None:

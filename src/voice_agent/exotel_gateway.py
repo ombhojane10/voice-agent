@@ -52,28 +52,45 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             nonlocal outbound_chunk, outbound_sequence_number, outbound_timestamp_ms
             if stream_sid is None:
                 return
-            async for pcm_8k in bridge.outbound_pcm():
-                outbound_remainder.extend(pcm_8k)
-                while len(outbound_remainder) >= 3200:
-                    frame = bytes(outbound_remainder[:3200])
-                    del outbound_remainder[:3200]
-                    outbound_buffer.push(frame)
-                    buffered_frame = outbound_buffer.pop()
-                    if not buffered_frame:
-                        continue
-                    metrics.mark_first_outbound()
-                    await websocket.send_json(
-                        build_media_event(
-                            stream_sid,
-                            buffered_frame,
-                            chunk=outbound_chunk,
-                            timestamp_ms=outbound_timestamp_ms,
-                            sequence_number=outbound_sequence_number,
+            try:
+                async for pcm_8k in bridge.outbound_pcm():
+                    outbound_remainder.extend(pcm_8k)
+                    while len(outbound_remainder) >= 3200:
+                        frame = bytes(outbound_remainder[:3200])
+                        del outbound_remainder[:3200]
+                        outbound_buffer.push(frame)
+                        buffered_frame = outbound_buffer.pop()
+                        if not buffered_frame:
+                            continue
+                        metrics.mark_first_outbound()
+                        await websocket.send_json(
+                            build_media_event(
+                                stream_sid,
+                                buffered_frame,
+                                chunk=outbound_chunk,
+                                timestamp_ms=outbound_timestamp_ms,
+                                sequence_number=outbound_sequence_number,
+                            )
                         )
-                    )
-                    outbound_chunk += 1
-                    outbound_sequence_number += 1
-                    outbound_timestamp_ms += 100
+                        log_event(
+                            "exotel_agent_audio_sent",
+                            call_id=call_id,
+                            bytes=len(buffered_frame),
+                            chunk=outbound_chunk,
+                            stream_sid=stream_sid,
+                        )
+                        outbound_chunk += 1
+                        outbound_sequence_number += 1
+                        outbound_timestamp_ms += 100
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.exception("Agent audio sender failed: %s", exc)
+                log_event(
+                    "exotel_agent_audio_sender_failed",
+                    call_id=call_id,
+                    error=exc.__class__.__name__,
+                )
 
         try:
             await bridge.connect()
