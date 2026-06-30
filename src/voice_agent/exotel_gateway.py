@@ -55,6 +55,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         outbound_chunk = 1
         outbound_timestamp_ms = 0
         outbound_sequence_number = 1
+        media_events_seen = 0
 
         async def send_agent_audio() -> None:
             nonlocal outbound_chunk, outbound_sequence_number, outbound_timestamp_ms
@@ -129,18 +130,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         agent_dispatched = True
 
                 metrics.increment(event.event)
-                log_event(
-                    "exotel_event_received",
-                    call_id=call_id,
-                    room=room_name,
-                    event=event.event,
-                    stream_sid=event.stream_sid,
-                )
+                if event.event != "media":
+                    log_event(
+                        "exotel_event_received",
+                        call_id=call_id,
+                        room=room_name,
+                        event=event.event,
+                        stream_sid=event.stream_sid,
+                    )
 
                 if event.is_media:
+                    media_events_seen += 1
                     metrics.mark_first_inbound()
                     await bridge.publish_caller_pcm(event.payload)
-                    log_event("exotel_media_forwarded", call_id=call_id, bytes=len(event.payload))
+                    if media_events_seen == 1 or media_events_seen % 100 == 0:
+                        log_event(
+                            "exotel_media_forwarded",
+                            call_id=call_id,
+                            bytes=len(event.payload),
+                            frames=media_events_seen,
+                        )
                 elif event.event == "dtmf":
                     cleared = outbound_buffer.clear()
                     if stream_sid:

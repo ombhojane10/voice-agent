@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 import os
 
+from livekit.plugins import google
+
 from .config import get_settings
 from .prompts import build_prompt
 from .tools import AGENT_TOOLS
@@ -23,7 +25,6 @@ class MandiVoiceAgent:
 
 async def entrypoint(ctx):
     from livekit.agents import Agent, AgentSession, RoomInputOptions
-    from livekit.plugins import google
 
     settings = get_settings()
     caller_phone = None
@@ -72,6 +73,21 @@ async def entrypoint(ctx):
     logger.info("Mandi voice agent greeting queued room=%s handle=%s", room_name, handle)
 
 
+async def request_fnc(req) -> None:
+    logger.info(
+        "Mandi voice agent job requested id=%s room=%s agent_name=%s",
+        getattr(req, "id", "unknown"),
+        getattr(getattr(req, "room", None), "name", "unknown"),
+        getattr(req, "agent_name", "unknown"),
+    )
+    await req.accept()
+    logger.info("Mandi voice agent job accepted id=%s", getattr(req, "id", "unknown"))
+
+
+def zero_load(*_args) -> float:
+    return 0.0
+
+
 def main() -> None:
     from livekit import agents
     from livekit.agents import JobExecutorType, cli
@@ -85,17 +101,23 @@ def main() -> None:
         else JobExecutorType.PROCESS
     )
 
+    worker_options = {
+        "entrypoint_fnc": entrypoint,
+        "request_fnc": request_fnc,
+        "agent_name": settings.livekit_agent_name,
+        "ws_url": settings.livekit_url,
+        "api_key": settings.livekit_api_key,
+        "api_secret": settings.livekit_api_secret,
+        "num_idle_processes": settings.livekit_num_idle_processes,
+        "job_executor_type": executor_type,
+        "load_threshold": 1.0,
+        "job_memory_warn_mb": 400,
+    }
+    if settings.livekit_disable_load_gate:
+        worker_options["load_fnc"] = zero_load
+
     cli.run_app(
-        agents.WorkerOptions(
-            entrypoint_fnc=entrypoint,
-            agent_name=settings.livekit_agent_name,
-            ws_url=settings.livekit_url,
-            api_key=settings.livekit_api_key,
-            api_secret=settings.livekit_api_secret,
-            num_idle_processes=settings.livekit_num_idle_processes,
-            job_executor_type=executor_type,
-            job_memory_warn_mb=400,
-        )
+        agents.WorkerOptions(**worker_options)
     )
 
 

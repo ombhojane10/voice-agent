@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     livekit_room_prefix: str = "mandi-call"
     livekit_num_idle_processes: int = 0
     livekit_job_executor_type: str = "thread"
+    livekit_disable_load_gate: bool = True
 
     google_api_key: str = ""
     gemini_live_model: str = "gemini-2.5-flash-native-audio-preview-12-2025"

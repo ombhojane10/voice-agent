@@ -26,6 +26,8 @@ class LiveKitAudioBridge:
         self._audio_source = None
         self._outbound: asyncio.Queue[bytes] = asyncio.Queue(maxsize=8)
         self._reader_tasks: set[asyncio.Task] = set()
+        self._published_frames = 0
+        self._agent_audio_frames = 0
 
     async def connect(self) -> None:
         try:
@@ -69,7 +71,7 @@ class LiveKitAudioBridge:
             api_secret=self.settings.livekit_api_secret,
         )
         try:
-            await client.agent_dispatch.create_dispatch(
+            dispatch = await client.agent_dispatch.create_dispatch(
                 api.CreateAgentDispatchRequest(
                     agent_name=self.settings.livekit_agent_name,
                     room=self.room_name,
@@ -80,6 +82,8 @@ class LiveKitAudioBridge:
                 "livekit_agent_dispatched",
                 room=self.room_name,
                 agent_name=self.settings.livekit_agent_name,
+                dispatch_id=getattr(dispatch, "id", ""),
+                dispatch_state=str(getattr(dispatch, "state", "")),
             )
         finally:
             await client.aclose()
@@ -110,7 +114,14 @@ class LiveKitAudioBridge:
             samples_per_channel=len(pcm_livekit) // (2 * self.settings.channels),
         )
         await self._audio_source.capture_frame(frame)
-        log_event("livekit_caller_audio_published", room=self.room_name, bytes=len(pcm_livekit))
+        self._published_frames += 1
+        if self._published_frames == 1 or self._published_frames % 100 == 0:
+            log_event(
+                "livekit_caller_audio_published",
+                room=self.room_name,
+                bytes=len(pcm_livekit),
+                frames=self._published_frames,
+            )
 
     async def outbound_pcm(self) -> AsyncIterator[bytes]:
         while True:
@@ -148,12 +159,15 @@ class LiveKitAudioBridge:
         async for event in stream:
             frame = event.frame
             data = bytes(frame.data)
-            log_event(
-                "agent_audio_frame_received",
-                room=self.room_name,
-                participant=participant_identity,
-                bytes=len(data),
-            )
+            self._agent_audio_frames += 1
+            if self._agent_audio_frames == 1 or self._agent_audio_frames % 100 == 0:
+                log_event(
+                    "agent_audio_frame_received",
+                    room=self.room_name,
+                    participant=participant_identity,
+                    bytes=len(data),
+                    frames=self._agent_audio_frames,
+                )
             if self._outbound.full():
                 try:
                     self._outbound.get_nowait()
