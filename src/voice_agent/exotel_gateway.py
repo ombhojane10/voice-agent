@@ -43,16 +43,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         stream_sid: str | None = None
         sender_task: asyncio.Task | None = None
         agent_dispatched = False
+        outbound_remainder = bytearray()
+        outbound_chunk = 1
+        outbound_timestamp_ms = 0
+        outbound_sequence_number = 1
 
         async def send_agent_audio() -> None:
+            nonlocal outbound_chunk, outbound_sequence_number, outbound_timestamp_ms
             if stream_sid is None:
                 return
             async for pcm_8k in bridge.outbound_pcm():
-                outbound_buffer.push(pcm_8k)
-                frame = outbound_buffer.pop()
-                if frame:
+                outbound_remainder.extend(pcm_8k)
+                while len(outbound_remainder) >= 3200:
+                    frame = bytes(outbound_remainder[:3200])
+                    del outbound_remainder[:3200]
+                    outbound_buffer.push(frame)
+                    buffered_frame = outbound_buffer.pop()
+                    if not buffered_frame:
+                        continue
                     metrics.mark_first_outbound()
-                    await websocket.send_json(build_media_event(stream_sid, frame))
+                    await websocket.send_json(
+                        build_media_event(
+                            stream_sid,
+                            buffered_frame,
+                            chunk=outbound_chunk,
+                            timestamp_ms=outbound_timestamp_ms,
+                            sequence_number=outbound_sequence_number,
+                        )
+                    )
+                    outbound_chunk += 1
+                    outbound_sequence_number += 1
+                    outbound_timestamp_ms += 100
 
         try:
             await bridge.connect()

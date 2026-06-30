@@ -35,8 +35,12 @@ def test_parse_dtmf_mark_clear_stop():
 
 
 def test_build_outbound_events():
-    media = build_media_event("s1", b"abc")
+    media = build_media_event("s1", b"abc", chunk=2, timestamp_ms=100, sequence_number=3)
     assert media["event"] == "media"
     assert media["stream_sid"] == "s1"
+    assert media["streamSid"] == "s1"
+    assert media["sequenceNumber"] == "3"
+    assert media["media"]["chunk"] == "2"
+    assert media["media"]["timestamp"] == "100"
     assert base64.b64decode(media["media"]["payload"]) == b"abc"
     assert build_clear_event("s1") == {"event": "clear", "stream_sid": "s1"}

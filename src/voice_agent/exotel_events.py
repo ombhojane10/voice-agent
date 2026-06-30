@@ -66,11 +66,29 @@ def parse_exotel_event(message: dict[str, Any]) -> ExotelEvent:
     )
 
 
-def build_media_event(stream_sid: str, pcm_payload: bytes) -> dict[str, Any]:
-    return {
+def build_media_event(
+    stream_sid: str,
+    pcm_payload: bytes,
+    *,
+    chunk: int | None = None,
+    timestamp_ms: int | None = None,
+    sequence_number: int | None = None,
+) -> dict[str, Any]:
+    media: dict[str, Any] = {"payload": base64.b64encode(pcm_payload).decode("ascii")}
+    if chunk is not None:
+        media["chunk"] = str(chunk)
+    if timestamp_ms is not None:
+        media["timestamp"] = str(timestamp_ms)
+    event: dict[str, Any] = {
         "event": "media",
         "stream_sid": stream_sid,
-        "media": {"payload": base64.b64encode(pcm_payload).decode("ascii")},
+        "streamSid": stream_sid,
+        "media": media,
+    }
+    if sequence_number is not None:
+        event["sequenceNumber"] = str(sequence_number)
+    return {
+        **event,
     }
 
 

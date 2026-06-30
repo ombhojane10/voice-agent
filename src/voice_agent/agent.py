@@ -49,6 +49,13 @@ async def entrypoint(ctx):
         room_input_options=RoomInputOptions(),
     )
     logger.info("Mandi voice agent started in room=%s", getattr(ctx.room, "name", "unknown"))
+    session.generate_reply(
+        instructions=(
+            "Immediately greet the caller in natural Hindi/Hinglish. Say you are the "
+            "MandiPlus AI assistant, ask how you can help, and keep it under two sentences."
+        ),
+        allow_interruptions=True,
+    )
 
 
 def main() -> None:

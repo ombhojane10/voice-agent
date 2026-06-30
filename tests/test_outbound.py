@@ -19,6 +19,7 @@ def test_normalize_india_phone_rejects_invalid_number():
 
 def test_build_exotel_call_payload_uses_agentstream_fields():
     settings = Settings(
+        _env_file=None,
         public_base_url="https://voice.example.com",
         exotel_caller_id="08047492990",
         exotel_ai_caller_id="08041234567",
@@ -41,6 +42,7 @@ def test_build_exotel_call_payload_uses_agentstream_fields():
 
 def test_build_exotel_call_payload_falls_back_to_existing_caller_id():
     settings = Settings(
+        _env_file=None,
         public_base_url="https://voice.example.com",
         exotel_caller_id="08047492990",
         exotel_account_sid="oneroot3",
