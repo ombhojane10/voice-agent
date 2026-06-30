@@ -35,6 +35,8 @@ class LiveKitAudioBridge:
         except Exception as exc:  # pragma: no cover - depends on optional runtime deps.
             raise RuntimeError("LiveKit packages are not installed. Run `uv sync`.") from exc
 
+        await self._ensure_room()
+
         token = (
             api.AccessToken(self.settings.livekit_api_key, self.settings.livekit_api_secret)
             .with_identity(self.participant_identity)
@@ -58,6 +60,27 @@ class LiveKitAudioBridge:
             room=self.room_name,
             identity=self.participant_identity,
         )
+
+    async def _ensure_room(self) -> None:
+        from livekit import api
+
+        client = api.LiveKitAPI(
+            url=self.settings.livekit_url,
+            api_key=self.settings.livekit_api_key,
+            api_secret=self.settings.livekit_api_secret,
+        )
+        try:
+            try:
+                room = await client.room.create_room(
+                    api.CreateRoomRequest(name=self.room_name, empty_timeout=300)
+                )
+                log_event("livekit_room_created", room=getattr(room, "name", self.room_name))
+            except Exception as exc:
+                if "already exists" not in str(exc).lower():
+                    raise
+                log_event("livekit_room_exists", room=self.room_name)
+        finally:
+            await client.aclose()
 
     async def dispatch_agent(self, metadata: str = "") -> None:
         if not self.settings.livekit_explicit_dispatch or not self.settings.livekit_agent_name:
@@ -84,6 +107,21 @@ class LiveKitAudioBridge:
                 agent_name=self.settings.livekit_agent_name,
                 dispatch_id=getattr(dispatch, "id", ""),
                 dispatch_state=str(getattr(dispatch, "state", "")),
+            )
+            await asyncio.sleep(0.5)
+            dispatches = await client.agent_dispatch.list_dispatch(self.room_name)
+            log_event(
+                "livekit_agent_dispatch_checked",
+                room=self.room_name,
+                dispatch_count=len(dispatches),
+                dispatches=[
+                    {
+                        "id": getattr(item, "id", ""),
+                        "agent_name": getattr(item, "agent_name", ""),
+                        "jobs": len(getattr(getattr(item, "state", None), "jobs", [])),
+                    }
+                    for item in dispatches
+                ],
             )
         finally:
             await client.aclose()

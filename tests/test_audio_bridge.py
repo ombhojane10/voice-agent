@@ -1,6 +1,11 @@
 from array import array
 
-from voice_agent.audio_bridge import OutboundAudioBuffer, resample_pcm16_mono
+from voice_agent.audio_bridge import (
+    OutboundAudioBuffer,
+    pcm16_duration_ms,
+    pcm16_rms,
+    resample_pcm16_mono,
+)
 
 
 def pcm(samples):
@@ -35,3 +40,13 @@ def test_outbound_buffer_keeps_latest_frame_and_clears():
     buffer.push(b"b")
     assert buffer.clear() == 1
     assert buffer.pop() is None
+
+
+def test_pcm16_duration_uses_sample_rate_and_channels():
+    assert pcm16_duration_ms(b"\0" * 320, sample_rate=8000, channels=1) == 20
+    assert pcm16_duration_ms(b"\0" * 1600, sample_rate=8000, channels=1) == 100
+
+
+def test_pcm16_rms_detects_speech_energy():
+    assert pcm16_rms(pcm([0, 0, 0, 0])) == 0
+    assert pcm16_rms(pcm([1000, -1000, 1000, -1000])) == 1000

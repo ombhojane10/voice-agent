@@ -39,11 +39,22 @@ class Settings(BaseSettings):
     inbound_sample_rate: int = Field(default=8000, ge=8000)
     livekit_sample_rate: int = Field(default=48000, ge=8000)
     channels: int = 1
+    exotel_outbound_frame_bytes: int = Field(default=320, ge=320)
+    exotel_barge_in_rms_threshold: int = Field(default=1400, ge=0)
+    exotel_barge_in_min_frames: int = Field(default=3, ge=1)
+    exotel_barge_in_window_ms: int = Field(default=1500, ge=0)
 
     @field_validator("public_base_url")
     @classmethod
     def strip_trailing_slash(cls, value: str) -> str:
         return value.rstrip("/")
+
+    @field_validator("exotel_outbound_frame_bytes")
+    @classmethod
+    def validate_exotel_frame_bytes(cls, value: int) -> int:
+        if value % 320 != 0:
+            raise ValueError("EXOTEL_OUTBOUND_FRAME_BYTES must be a multiple of 320")
+        return value
 
     @property
     def exotel_calls_url(self) -> str:

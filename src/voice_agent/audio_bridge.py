@@ -4,6 +4,7 @@ import sys
 from array import array
 from collections import deque
 from dataclasses import dataclass, field
+from math import sqrt
 
 PCM16_MIN = -32768
 PCM16_MAX = 32767
@@ -54,6 +55,25 @@ def resample_pcm16_mono(pcm: bytes, source_rate: int, target_rate: int) -> bytes
         sample = round(source[left_index] * (1.0 - frac) + source[right_index] * frac)
         target.append(max(PCM16_MIN, min(PCM16_MAX, sample)))
     return _samples_to_pcm16(target)
+
+
+def pcm16_rms(pcm: bytes) -> float:
+    if not pcm:
+        return 0.0
+    if len(pcm) % 2 != 0:
+        raise ValueError("PCM16 payload length must be even")
+
+    samples = _pcm16_to_samples(pcm)
+    if not samples:
+        return 0.0
+    return sqrt(sum(sample * sample for sample in samples) / len(samples))
+
+
+def pcm16_duration_ms(pcm: bytes, sample_rate: int, channels: int = 1) -> int:
+    if not pcm:
+        return 0
+    samples_per_channel = len(pcm) / (2 * channels)
+    return max(1, round(samples_per_channel * 1000 / sample_rate))
 
 
 @dataclass

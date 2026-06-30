@@ -6,11 +6,11 @@ from uuid import uuid4
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
-from .audio_bridge import OutboundAudioBuffer
+from .audio_bridge import OutboundAudioBuffer, pcm16_duration_ms, pcm16_rms
 from .config import Settings, get_settings
 from .exotel_events import build_clear_event, build_media_event, parse_exotel_event
 from .livekit_bridge import LiveKitAudioBridge
-from .metrics import CallMetrics, log_event
+from .metrics import CallMetrics, log_event, now_ms
 
 logger = logging.getLogger(__name__)
 
@@ -56,17 +56,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         outbound_timestamp_ms = 0
         outbound_sequence_number = 1
         media_events_seen = 0
+        outbound_frames_sent = 0
+        last_outbound_sent_ms: int | None = None
+        speech_frames_during_agent = 0
+        interruption_clear_sent = False
 
         async def send_agent_audio() -> None:
-            nonlocal outbound_chunk, outbound_sequence_number, outbound_timestamp_ms
+            nonlocal interruption_clear_sent
+            nonlocal last_outbound_sent_ms
+            nonlocal outbound_chunk
+            nonlocal outbound_frames_sent
+            nonlocal outbound_sequence_number
+            nonlocal outbound_timestamp_ms
             if stream_sid is None:
                 return
             try:
                 async for pcm_8k in bridge.outbound_pcm():
                     outbound_remainder.extend(pcm_8k)
-                    while len(outbound_remainder) >= 3200:
-                        frame = bytes(outbound_remainder[:3200])
-                        del outbound_remainder[:3200]
+                    while len(outbound_remainder) >= settings.exotel_outbound_frame_bytes:
+                        frame = bytes(outbound_remainder[: settings.exotel_outbound_frame_bytes])
+                        del outbound_remainder[: settings.exotel_outbound_frame_bytes]
                         outbound_buffer.push(frame)
                         buffered_frame = outbound_buffer.pop()
                         if not buffered_frame:
@@ -81,18 +90,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                 sequence_number=outbound_sequence_number,
                             )
                         )
-                        log_event(
-                            "exotel_agent_audio_sent",
-                            call_id=call_id,
-                            bytes=len(buffered_frame),
-                            chunk=outbound_chunk,
-                            stream_sid=stream_sid,
-                        )
+                        outbound_frames_sent += 1
+                        last_outbound_sent_ms = now_ms()
+                        if outbound_frames_sent == 1 or outbound_frames_sent % 50 == 0:
+                            log_event(
+                                "exotel_agent_audio_sent",
+                                call_id=call_id,
+                                bytes=len(buffered_frame),
+                                chunk=outbound_chunk,
+                                frame_duration_ms=pcm16_duration_ms(
+                                    buffered_frame,
+                                    sample_rate=settings.inbound_sample_rate,
+                                    channels=settings.channels,
+                                ),
+                                stream_sid=stream_sid,
+                            )
                         outbound_chunk += 1
                         outbound_sequence_number += 1
-                        outbound_timestamp_ms += 100
+                        outbound_timestamp_ms += pcm16_duration_ms(
+                            buffered_frame,
+                            sample_rate=settings.inbound_sample_rate,
+                            channels=settings.channels,
+                        )
             except asyncio.CancelledError:
                 raise
+            except WebSocketDisconnect:
+                log_event("exotel_agent_audio_sender_disconnected", call_id=call_id)
             except Exception as exc:
                 logger.exception("Agent audio sender failed: %s", exc)
                 log_event(
@@ -150,8 +173,44 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                             bytes=len(event.payload),
                             frames=media_events_seen,
                         )
+
+                    rms = pcm16_rms(event.payload)
+                    agent_audio_recent = (
+                        last_outbound_sent_ms is not None
+                        and now_ms() - last_outbound_sent_ms
+                        <= settings.exotel_barge_in_window_ms
+                    )
+                    is_speech_during_agent = (
+                        agent_audio_recent and rms >= settings.exotel_barge_in_rms_threshold
+                    )
+                    if is_speech_during_agent:
+                        speech_frames_during_agent += 1
+                    else:
+                        speech_frames_during_agent = 0
+                        interruption_clear_sent = False
+
+                    if (
+                        stream_sid
+                        and agent_audio_recent
+                        and not interruption_clear_sent
+                        and speech_frames_during_agent >= settings.exotel_barge_in_min_frames
+                    ):
+                        cleared = outbound_buffer.clear()
+                        remainder_bytes = len(outbound_remainder)
+                        outbound_remainder.clear()
+                        await websocket.send_json(build_clear_event(stream_sid))
+                        interruption_clear_sent = True
+                        log_event(
+                            "caller_speech_barge_in_detected",
+                            call_id=call_id,
+                            rms=round(rms, 2),
+                            cleared_frames=cleared,
+                            cleared_remainder_bytes=remainder_bytes,
+                        )
                 elif event.event == "dtmf":
                     cleared = outbound_buffer.clear()
+                    remainder_bytes = len(outbound_remainder)
+                    outbound_remainder.clear()
                     if stream_sid:
                         await websocket.send_json(build_clear_event(stream_sid))
                     log_event(
@@ -159,10 +218,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         call_id=call_id,
                         digit=event.dtmf_digit,
                         cleared_frames=cleared,
+                        cleared_remainder_bytes=remainder_bytes,
                     )
                 elif event.event == "clear":
                     cleared = outbound_buffer.clear()
-                    log_event("outbound_audio_cleared", call_id=call_id, cleared_frames=cleared)
+                    remainder_bytes = len(outbound_remainder)
+                    outbound_remainder.clear()
+                    log_event(
+                        "outbound_audio_cleared",
+                        call_id=call_id,
+                        cleared_frames=cleared,
+                        cleared_remainder_bytes=remainder_bytes,
+                    )
                 elif event.event == "stop":
                     break
 
