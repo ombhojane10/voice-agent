@@ -57,6 +57,23 @@ Start the LiveKit worker in another terminal:
 uv run voice-agent-worker dev
 ```
 
+For Render, deploy two services:
+
+- Web service: `uv run voice-agent-api`
+- Background worker: `uv run voice-agent-worker start`
+
+Set `PUBLIC_BASE_URL` to the Render web service URL, for example:
+
+```env
+PUBLIC_BASE_URL=https://voice-agent-api.onrender.com
+```
+
+Exotel should point to:
+
+```text
+wss://voice-agent-api.onrender.com/ws/exotel/agentstream
+```
+
 Expose the API with a tunnel and configure Exotel AgentStream to connect to:
 
 ```text

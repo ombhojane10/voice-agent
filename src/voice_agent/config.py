@@ -9,6 +9,7 @@ class Settings(BaseSettings):
 
     env: str = "development"
     log_level: str = "INFO"
+    port: int = 8008
     public_base_url: str = ""
 
     livekit_url: str = ""

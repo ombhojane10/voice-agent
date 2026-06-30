@@ -139,7 +139,7 @@ def main() -> None:
     uvicorn.run(
         "voice_agent.exotel_gateway:app",
         host="0.0.0.0",
-        port=8008,
+        port=settings.port,
         reload=settings.env == "development",
     )
 

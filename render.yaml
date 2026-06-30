@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: voice-agent-api
+    runtime: python
+    plan: starter
+    buildCommand: pip install uv && uv sync --frozen
+    startCommand: uv run voice-agent-api
+    envVars:
+      - key: ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+
+  - type: worker
+    name: voice-agent-worker
+    runtime: python
+    plan: starter
+    buildCommand: pip install uv && uv sync --frozen
+    startCommand: uv run voice-agent-worker start
+    envVars:
+      - key: ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
