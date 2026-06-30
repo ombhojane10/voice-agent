@@ -62,6 +62,12 @@ For Render, deploy two services:
 - Web service: `uv run voice-agent-api`
 - Background worker: `uv run voice-agent-worker start`
 
+If you want to run both on one Render service while testing, use:
+
+```bash
+bash scripts/start_render_combined.sh
+```
+
 Set `PUBLIC_BASE_URL` to the Render web service URL, for example:
 
 ```env
