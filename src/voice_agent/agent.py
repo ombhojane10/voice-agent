@@ -74,11 +74,16 @@ async def entrypoint(ctx):
 
 def main() -> None:
     from livekit import agents
-    from livekit.agents import cli
+    from livekit.agents import JobExecutorType, cli
 
     settings = get_settings()
     os.environ.setdefault("GOOGLE_API_KEY", settings.google_api_key)
     logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
+    executor_type = (
+        JobExecutorType.THREAD
+        if settings.livekit_job_executor_type.lower() == "thread"
+        else JobExecutorType.PROCESS
+    )
 
     cli.run_app(
         agents.WorkerOptions(
@@ -88,6 +93,7 @@ def main() -> None:
             api_key=settings.livekit_api_key,
             api_secret=settings.livekit_api_secret,
             num_idle_processes=settings.livekit_num_idle_processes,
+            job_executor_type=executor_type,
             job_memory_warn_mb=400,
         )
     )

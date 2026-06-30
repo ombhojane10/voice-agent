@@ -19,6 +19,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     app = FastAPI(title="MandiPlus Voice Agent Gateway", version="0.1.0")
 
+    @app.get("/")
+    async def root() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.head("/")
+    async def root_head() -> None:
+        return None
+
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
