@@ -87,6 +87,8 @@ def main() -> None:
             ws_url=settings.livekit_url,
             api_key=settings.livekit_api_key,
             api_secret=settings.livekit_api_secret,
+            num_idle_processes=settings.livekit_num_idle_processes,
+            job_memory_warn_mb=400,
         )
     )
 

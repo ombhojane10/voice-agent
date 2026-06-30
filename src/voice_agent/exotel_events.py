@@ -36,9 +36,11 @@ def parse_exotel_event(message: dict[str, Any]) -> ExotelEvent:
     stream_sid = (
         message.get("stream_sid")
         or message.get("streamSid")
+        or message.get("stream sid")
         or message.get("StreamSid")
         or start.get("stream_sid")
         or start.get("streamSid")
+        or start.get("stream sid")
     )
     call_sid = (
         message.get("call_sid")
@@ -59,7 +61,11 @@ def parse_exotel_event(message: dict[str, Any]) -> ExotelEvent:
         raw=message,
         stream_sid=stream_sid,
         call_sid=call_sid,
-        sequence_number=message.get("sequenceNumber") or message.get("sequence_number"),
+        sequence_number=(
+            message.get("sequenceNumber")
+            or message.get("sequence_number")
+            or message.get("sequence number")
+        ),
         payload=payload,
         dtmf_digit=dtmf.get("digit") or message.get("digit"),
         mark_name=mark.get("name") or message.get("name"),
@@ -83,18 +89,31 @@ def build_media_event(
         "event": "media",
         "stream_sid": stream_sid,
         "streamSid": stream_sid,
+        "stream sid": stream_sid,
         "media": media,
     }
     if sequence_number is not None:
         event["sequenceNumber"] = str(sequence_number)
+        event["sequence number"] = str(sequence_number)
     return {
         **event,
     }
 
 
 def build_clear_event(stream_sid: str) -> dict[str, Any]:
-    return {"event": "clear", "stream_sid": stream_sid}
+    return {
+        "event": "clear",
+        "stream_sid": stream_sid,
+        "streamSid": stream_sid,
+        "stream sid": stream_sid,
+    }
 
 
 def build_mark_event(stream_sid: str, name: str) -> dict[str, Any]:
-    return {"event": "mark", "stream_sid": stream_sid, "mark": {"name": name}}
+    return {
+        "event": "mark",
+        "stream_sid": stream_sid,
+        "streamSid": stream_sid,
+        "stream sid": stream_sid,
+        "mark": {"name": name},
+    }

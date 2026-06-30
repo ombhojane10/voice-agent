@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-uv run voice-agent-worker start &
+uv run --no-sync voice-agent-worker start &
 worker_pid=$!
 
 cleanup() {
@@ -9,4 +9,4 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-uv run voice-agent-api
+uv run --no-sync voice-agent-api

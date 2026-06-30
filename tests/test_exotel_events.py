@@ -4,7 +4,7 @@ from voice_agent.exotel_events import build_clear_event, build_media_event, pars
 
 
 def test_parse_connected_event():
-    event = parse_exotel_event({"event": "connected", "stream_sid": "s1"})
+    event = parse_exotel_event({"event": "connected", "stream sid": "s1"})
     assert event.event == "connected"
     assert event.stream_sid == "s1"
 
@@ -39,8 +39,15 @@ def test_build_outbound_events():
     assert media["event"] == "media"
     assert media["stream_sid"] == "s1"
     assert media["streamSid"] == "s1"
+    assert media["stream sid"] == "s1"
     assert media["sequenceNumber"] == "3"
+    assert media["sequence number"] == "3"
     assert media["media"]["chunk"] == "2"
     assert media["media"]["timestamp"] == "100"
     assert base64.b64decode(media["media"]["payload"]) == b"abc"
-    assert build_clear_event("s1") == {"event": "clear", "stream_sid": "s1"}
+    assert build_clear_event("s1") == {
+        "event": "clear",
+        "stream_sid": "s1",
+        "streamSid": "s1",
+        "stream sid": "s1",
+    }

@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     livekit_agent_name: str = "mandi-gemini-agent"
     livekit_explicit_dispatch: bool = True
     livekit_room_prefix: str = "mandi-call"
+    livekit_num_idle_processes: int = 1
 
     google_api_key: str = ""
     gemini_live_model: str = "gemini-2.5-flash-native-audio-preview-12-2025"
